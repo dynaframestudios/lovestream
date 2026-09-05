@@ -31,14 +31,68 @@ document.addEventListener("click", (e) => {
 /* ---------- boot ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   renderProfiles();
+  renderDaysTogether();
+
   document.getElementById("modal-close").addEventListener("click", closeModal);
   document.getElementById("modal-backdrop").addEventListener("click", (e) => {
     if (e.target.id === "modal-backdrop") closeModal();
   });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
+
+  document.getElementById("player-close").addEventListener("click", closeEpisodePlayer);
+  document.getElementById("player-overlay").addEventListener("click", (e) => {
+    if (e.target.id === "player-overlay") closeEpisodePlayer();
   });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const playerOpen = !document.getElementById("player-overlay").classList.contains("hidden");
+    if (playerOpen) {
+      closeEpisodePlayer();
+    } else {
+      closeModal();
+    }
+  });
+
+  // search
+  const searchToggle = document.getElementById("search-toggle");
+  const searchBar = document.getElementById("search-bar");
+  const searchInput = document.getElementById("search-input");
+  searchToggle.addEventListener("click", () => {
+    searchBar.classList.toggle("hidden");
+    if (!searchBar.classList.contains("hidden")) searchInput.focus();
+    else {
+      searchInput.value = "";
+      applySearchFilter("");
+    }
+  });
+  searchInput.addEventListener("input", (e) => applySearchFilter(e.target.value));
 });
+
+/* ---------- days together badge ---------- */
+function renderDaysTogether() {
+  const el = document.getElementById("days-together");
+  if (!RELATIONSHIP_START_DATE) return;
+  const start = new Date(RELATIONSHIP_START_DATE + "T00:00:00");
+  if (isNaN(start.getTime())) return;
+  const days = Math.floor((Date.now() - start.getTime()) / 86400000);
+  el.textContent = `Day ${days} together`;
+  el.classList.remove("hidden");
+}
+
+/* ---------- search ---------- */
+function applySearchFilter(query) {
+  const q = query.trim().toLowerCase();
+  document.querySelectorAll("#rows .row").forEach((rowEl) => {
+    let anyVisible = false;
+    rowEl.querySelectorAll(".card").forEach((cardEl) => {
+      const label = cardEl.querySelector(".card-label")?.textContent.toLowerCase() || "";
+      const match = q === "" || label.includes(q);
+      cardEl.style.display = match ? "" : "none";
+      if (match) anyVisible = true;
+    });
+    rowEl.style.display = anyVisible ? "" : "none";
+  });
+}
 
 /* ---------- profile picker ---------- */
 function renderProfiles() {
@@ -100,12 +154,55 @@ function renderHero() {
 }
 
 /* ---------- rows ---------- */
+const SAVED_KEY = "lovestream_saved";
+
+function getSavedIds() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function isSaved(id) {
+  return getSavedIds().includes(id);
+}
+
+function toggleSaved(id, btnEl) {
+  let ids = getSavedIds();
+  if (ids.includes(id)) {
+    ids = ids.filter((x) => x !== id);
+    btnEl.classList.remove("saved");
+    btnEl.querySelector("i").className = "fa-regular fa-heart";
+  } else {
+    ids.push(id);
+    btnEl.classList.add("saved");
+    btnEl.querySelector("i").className = "fa-solid fa-heart";
+  }
+  localStorage.setItem(SAVED_KEY, JSON.stringify(ids));
+  renderRows(); // rebuild so "My List" row stays in sync
+}
+
+function getAllShowsFlat() {
+  const all = [SHOWS.flagship];
+  Object.values(SHOWS.rows).forEach((arr) => all.push(...arr));
+  return all;
+}
+
 function renderRows() {
   const container = document.getElementById("rows");
   container.innerHTML = "";
 
   // Flagship always gets its own top row
   container.appendChild(buildRow("The Love Story", [SHOWS.flagship], true));
+
+  const savedIds = getSavedIds();
+  if (savedIds.length > 0) {
+    const savedShows = getAllShowsFlat().filter((s) => savedIds.includes(s.id));
+    if (savedShows.length > 0) {
+      container.appendChild(buildRow("My List", savedShows, false));
+    }
+  }
 
   Object.entries(SHOWS.rows).forEach(([rowName, shows]) => {
     if (!shows || shows.length === 0) return;
@@ -132,6 +229,9 @@ function buildRow(name, shows, isFlagshipRow) {
     card.innerHTML = `
       <span class="card-art"></span>
       ${show.video ? `<video class="card-video" muted loop playsinline src="${show.video}"></video>` : ""}
+      <button class="card-save" aria-label="Save to My List" data-id="${show.id}">
+        <i class="fa-regular fa-heart"></i>
+      </button>
       <span class="card-label">${show.title}</span>
       ${
         show.progress
@@ -140,6 +240,16 @@ function buildRow(name, shows, isFlagshipRow) {
       }
     `;
     card.addEventListener("click", () => openModal(show));
+
+    const saveBtn = card.querySelector(".card-save");
+    saveBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSaved(show.id, saveBtn);
+    });
+    if (isSaved(show.id)) {
+      saveBtn.classList.add("saved");
+      saveBtn.querySelector("i").className = "fa-solid fa-heart";
+    }
 
     const artEl = card.querySelector(".card-art");
     if (show.poster) {
@@ -180,7 +290,7 @@ function arrowBtn(dir, onClick) {
   const btn = document.createElement("button");
   btn.className = `row-arrow row-arrow-${dir}`;
   btn.setAttribute("aria-label", dir === "left" ? "Scroll left" : "Scroll right");
-  btn.textContent = dir === "left" ? "‹" : "›";
+  btn.innerHTML = `<i class="fa-solid fa-chevron-${dir}"></i>`;
   btn.addEventListener("click", onClick);
   return btn;
 }
@@ -228,8 +338,12 @@ function openModal(show) {
   (show.episodes || []).forEach((ep) => {
     const li = document.createElement("li");
     li.className = "episode";
+    const playBtn = ep.video
+      ? `<button class="episode-play" aria-label="Play ${ep.title}"><i class="fa-solid fa-circle-play"></i></button>`
+      : "";
     li.innerHTML = isFlagship
       ? `
+        ${playBtn}
         <span class="ep-code">${ep.code}</span>
         <span class="ep-body">
           <span class="ep-title">${ep.title}</span>
@@ -238,6 +352,7 @@ function openModal(show) {
         <span class="ep-date">${ep.date || ""}</span>
       `
       : `
+        ${playBtn}
         <span class="ep-code">${ep.code}</span>
         <span class="ep-body">
           <span class="ep-title">${ep.title}</span>
@@ -245,6 +360,9 @@ function openModal(show) {
         </span>
         <span class="ep-duration">${ep.duration || ""}</span>
       `;
+    if (ep.video) {
+      li.querySelector(".episode-play").addEventListener("click", () => openEpisodePlayer(show, ep));
+    }
     epList.appendChild(li);
   });
 
@@ -257,4 +375,28 @@ function closeModal() {
   document.body.classList.remove("modal-open");
   const modalVideo = document.getElementById("modal-video");
   modalVideo.pause();
+}
+
+/* ---------- episode player (memories archive) ---------- */
+function openEpisodePlayer(show, ep) {
+  const overlay = document.getElementById("player-overlay");
+  const video = document.getElementById("player-video");
+  video.src = ep.video;
+  video.currentTime = 0;
+  overlay.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  video.play().catch(() => {});
+
+  document.getElementById("player-title").textContent = ep.title;
+  document.getElementById("player-sub").textContent =
+    `${show.title} — ${ep.code}${ep.date ? " — " + ep.date : ""}`;
+}
+
+function closeEpisodePlayer() {
+  const overlay = document.getElementById("player-overlay");
+  const video = document.getElementById("player-video");
+  video.pause();
+  video.removeAttribute("src");
+  overlay.classList.add("hidden");
+  document.body.classList.remove("modal-open");
 }

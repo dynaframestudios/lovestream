@@ -30,14 +30,21 @@
      cast        - array of strings
      episodes    - array of episode objects:
          { code: "S1E01", title: "...", duration: "...",
-           date: "2023-06-14", blurb: "..." }
+           date: "2023-06-14", blurb: "...", video: "assets/videos/xyz.mp4" }
          (date is optional — used for the commit-log style metadata
-          on the flagship show)
+          on the flagship show. video is optional — if set, a play
+          button appears on that episode row and clicking it opens
+          a full video player, so you can build up a real archive of
+          memories on the flagship show over time.)
 
    POSTERS: Don is generating these with Gemini — once a poster/backdrop
    is ready, just drop the file into assets/posters/ and set the path
    below. Leave "" until then; it'll fall back to a dark placeholder.
    ============================================================ */
+
+/* Set this to the date you two got together (YYYY-MM-DD) to show a
+   "Day 000 together" badge in the top bar. Leave it as "" to hide it. */
+const RELATIONSHIP_START_DATE = "";
 
 const SHOWS = {
 
@@ -67,6 +74,7 @@ const SHOWS = {
         title: "The Pilot Episode",
         duration: "A few days",
         date: "12 June 2025",
+        video: "assets/videos/thelovestory.mp4",
         blurb: "Where it all began. We take a look at where the story started before the current events"
       }
     ]
