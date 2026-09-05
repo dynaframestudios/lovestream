@@ -44,7 +44,7 @@
 
 /* Set this to the date you two got together (YYYY-MM-DD) to show a
    "Day 000 together" badge in the top bar. Leave it as "" to hide it. */
-const RELATIONSHIP_START_DATE = "";
+const RELATIONSHIP_START_DATE = "2025-12-22";
 
 const SHOWS = {
 
